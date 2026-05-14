@@ -131,13 +131,13 @@ function App() {
             {student.name} - {student.course} - {student.year} - {student.IdNumber}
           </p>
 
-          // part 3: LOAD DATA INTO INPUTS (button)
+          <!-- part 3: LOAD DATA INTO INPUTS (button) -->
 
           <button onClick={() => editStudent(index)}>
             Edit
           </button>
 
-          // part 4: DELETE (button)
+          <!-- part 4: DELETE (button) -->
 
           <button onClick={() => deleteStudent(index)}>
             Delete
