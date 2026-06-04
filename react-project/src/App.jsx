@@ -4,12 +4,16 @@ import CharacterForm from './CharacterForm';
 import CharacterList from './CharacterList';
 import SkillPanel from './SkillPanel';
 import {
-  createBaseSkills,
-  applyRaceBonuses,
   getLevelThreshold,
   calculateSkillXpGain,
-  BASE_STATS,
+  buildFreshCharacterProgression,
 } from './data';
+
+const EDIT_RESET_WARNING =
+  'Committing to edit will reset all character stats, stat points, and skills. Name and race can still be changed. Continue?';
+
+const DELETE_WARNING =
+  'Deleting this character cannot be undone. Continue?';
 
 const STORAGE_KEY = 'skyrim-characters';
 
@@ -61,33 +65,22 @@ function App() {
       id: Date.now(),
       name: name.trim(),
       race,
-      level: 1,
-      xp: 0,
-      perkPoints: 0,
-      health: BASE_STATS.health,
-      magicka: BASE_STATS.magicka,
-      stamina: BASE_STATS.stamina,
-      pendingStatPoints: 0,
-      skills: applyRaceBonuses(createBaseSkills(), race),
+      ...buildFreshCharacterProgression(race),
     };
     setCharacters((prev) => [...prev, newCharacter]);
     setSelectedId(newCharacter.id);
   }
 
-  // --- UPDATE (form): rename or change race ---
+  // --- UPDATE (form): optional name/race; always reset progression ---
   function handleUpdate({ id, name, race }) {
     setCharacters((prev) =>
       prev.map((c) => {
         if (c.id !== id) return c;
-        const raceChanged = c.race !== race;
         return {
-          ...c,
+          id: c.id,
           name: name.trim(),
           race,
-          // Re-apply bonuses when race changes; keep progression otherwise
-          skills: raceChanged
-            ? applyRaceBonuses(createBaseSkills(), race)
-            : c.skills,
+          ...buildFreshCharacterProgression(race),
         };
       })
     );
@@ -96,6 +89,7 @@ function App() {
 
   // --- DELETE: remove character by id ---
   function handleDelete(id) {
+    if (!window.confirm(DELETE_WARNING)) return;
     setCharacters((prev) => prev.filter((c) => c.id !== id));
     if (selectedId === id) setSelectedId(null);
     if (editingCharacter?.id === id) setEditingCharacter(null);
@@ -159,6 +153,7 @@ function App() {
   }
 
   function handleStartEdit(character) {
+    if (!window.confirm(EDIT_RESET_WARNING)) return;
     setEditingCharacter(character);
     setSelectedId(character.id);
   }

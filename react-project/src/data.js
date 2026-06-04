@@ -125,6 +125,20 @@ export const BASE_STATS = {
   stamina: 100,
 };
 
+// Level 1 progression (stats, XP, perks, base skills + race bonuses)
+export function buildFreshCharacterProgression(race) {
+  return {
+    level: 1,
+    xp: 0,
+    perkPoints: 0,
+    health: BASE_STATS.health,
+    magicka: BASE_STATS.magicka,
+    stamina: BASE_STATS.stamina,
+    pendingStatPoints: 0,
+    skills: applyRaceBonuses(createBaseSkills(), race),
+  };
+}
+
 // Create a fresh skills object — every skill starts at 15
 export function createBaseSkills() {
   const skills = {};
@@ -156,5 +170,11 @@ export function calculateSkillXpGain(oldLevel, newLevel) {
   return ((oldLevel + 1 + newLevel) * steps) / 2;
 }
 
-// Skyrim skill level cap for sliders
+// Skyrim skill level range for sliders (base 15, cap 100)
+export const SKILL_MIN = 15;
 export const SKILL_CAP = 100;
+
+/** Map skill level to 0–100% track position on the full 15–100 slider. */
+export function skillLevelToSliderPercent(level) {
+  return ((level - SKILL_MIN) / (SKILL_CAP - SKILL_MIN)) * 100;
+}

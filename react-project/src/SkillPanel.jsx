@@ -1,5 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
-import { SKILLS, getLevelThreshold, SKILL_CAP } from './data';
+import {
+  SKILLS,
+  getLevelThreshold,
+  SKILL_MIN,
+  SKILL_CAP,
+  skillLevelToSliderPercent,
+} from './data';
 
 const STAT_BAR_MAX = 300;
 
@@ -7,14 +13,68 @@ function statBarWidth(value) {
   return `${Math.min(100, (value / STAT_BAR_MAX) * 100)}%`;
 }
 
+/** Passive bonus line for a skill at level s (15–100), without perks. */
+function getSkillPassiveStat(skillKey, s) {
+  const level = Number(s);
+  switch (skillKey) {
+    case 'oneHanded':
+    case 'twoHanded':
+      return { label: 'Weapon Dmg', value: `+${(level * 0.5).toFixed(0)}%` };
+    case 'archery':
+      return { label: 'Bow Dmg', value: `+${(level * 0.5).toFixed(0)}%` };
+    case 'block':
+      return {
+        label: 'Dmg Blocked',
+        value: `${Math.min(Math.floor(level * 0.3), 30).toFixed(0)}%`,
+      };
+    case 'heavyArmor':
+    case 'lightArmor':
+      return { label: 'Armor Rating', value: `+${Math.floor(level * 0.4)}%` };
+    case 'smithing':
+      return { label: 'Item Improve', value: `+${Math.floor(level * 0.5)}%` };
+    case 'alteration':
+    case 'conjuration':
+    case 'destruction':
+    case 'illusion':
+    case 'restoration':
+      return { label: 'Spell Cost', value: `-${(level * 0.41).toFixed(0)}%` };
+    case 'enchanting':
+      return {
+        label: 'Enchant Power',
+        value: `+${((level / 100) ** 2 * 25).toFixed(1)}%`,
+      };
+    case 'alchemy':
+      return { label: 'Potion Strength', value: `+${(level * 0.5).toFixed(0)}%` };
+    case 'sneak':
+      return { label: 'Detection', value: `${level}% resist` };
+    case 'pickpocket':
+      return {
+        label: 'Steal Chance',
+        value: `${Math.min(15 + level, 90)}%`,
+      };
+    case 'lockpicking':
+      return { label: 'Lock Skill', value: `Lv ${level}` };
+    case 'speech':
+      return { label: 'Buy/Sell', value: `+${Math.floor(level * 0.3)}% prices` };
+    default:
+      return null;
+  }
+}
+
 // Shows selected character's stats, skills (sliders), and stat point spending
 function SkillPanel({ character, onSkillSliderRelease, onStatChoice }) {
-  const [skillPreviews, setSkillPreviews] = useState({});
-  const releaseLock = useRef(false);
+  const [previewSkills, setPreviewSkills] = useState({});
+  const commitLock = useRef(false);
+
+  // Sync when character changes or saved skills reset (e.g. edit save — same id)
+  const savedSkillsKey = character
+    ? JSON.stringify(character.skills)
+    : null;
 
   useEffect(() => {
-    setSkillPreviews({});
-  }, [character?.id]);
+    if (!character) return;
+    setPreviewSkills({ ...character.skills });
+  }, [character?.id, savedSkillsKey]);
 
   if (!character) {
     return (
@@ -30,34 +90,27 @@ function SkillPanel({ character, onSkillSliderRelease, onStatChoice }) {
   const canSpendStat = pendingStatPoints > 0;
   const xpPercent = Math.min(100, (character.xp / xpNeeded) * 100);
 
-  function getDisplayLevel(skillKey) {
-    return skillPreviews[skillKey] ?? character.skills[skillKey];
+  function handleSliderChange(skill, value) {
+    const committed = character.skills[skill];
+    const num = Math.max(
+      committed,
+      Math.min(SKILL_CAP, Number(value))
+    );
+    setPreviewSkills((prev) => ({ ...prev, [skill]: num }));
   }
 
-  function handleSliderChange(skillKey, value) {
-    const num = Number(value);
-    setSkillPreviews((prev) => ({ ...prev, [skillKey]: num }));
-  }
-
-  function handleSliderRelease(skillKey) {
-    if (releaseLock.current) return;
-    releaseLock.current = true;
+  function handleSliderCommit(skill) {
+    if (commitLock.current) return;
+    commitLock.current = true;
     requestAnimationFrame(() => {
-      releaseLock.current = false;
+      commitLock.current = false;
     });
 
-    const oldLevel = character.skills[skillKey];
-    const newLevel = skillPreviews[skillKey] ?? oldLevel;
+    const oldVal = character.skills[skill];
+    const newVal = previewSkills[skill] ?? oldVal;
+    if (newVal <= oldVal) return;
 
-    setSkillPreviews((prev) => {
-      const next = { ...prev };
-      delete next[skillKey];
-      return next;
-    });
-
-    if (newLevel > oldLevel) {
-      onSkillSliderRelease(character.id, skillKey, oldLevel, newLevel);
-    }
+    onSkillSliderRelease(character.id, skill, oldVal, newVal);
   }
 
   return (
@@ -149,29 +202,40 @@ function SkillPanel({ character, onSkillSliderRelease, onStatChoice }) {
       <ul className="skills-list">
         {SKILLS.map(({ key, label }) => {
           const committed = character.skills[key];
-          const display = getDisplayLevel(key);
-          const isPreview = skillPreviews[key] !== undefined;
-          const fillPercent =
-            ((display - committed) / (SKILL_CAP - committed)) * 100 || 0;
+          const preview = Math.max(
+            committed,
+            previewSkills[key] ?? committed
+          );
+          const isPreview = preview !== committed;
+          const fillPercent = skillLevelToSliderPercent(preview);
+          const passive = getSkillPassiveStat(key, preview);
 
           return (
             <li key={key} className="skill-row">
               <span className="skill-name">{label}</span>
               <span className={`skill-level ${isPreview ? 'skill-preview' : ''}`}>
-                {display}
+                {preview}
               </span>
-              <div className="skill-slider-wrap">
-                <input
-                  type="range"
-                  className="skill-slider"
-                  min={committed}
-                  max={SKILL_CAP}
-                  value={display}
-                  style={{ '--slider-fill': `${fillPercent}%` }}
-                  onChange={(e) => handleSliderChange(key, e.target.value)}
-                  onPointerUp={() => handleSliderRelease(key)}
-                  onMouseUp={() => handleSliderRelease(key)}
-                />
+              <div className="skill-slider-col">
+                <div className="skill-slider-wrap">
+                  <input
+                    type="range"
+                    className="skill-slider"
+                    min={SKILL_MIN}
+                    max={SKILL_CAP}
+                    step={1}
+                    value={preview}
+                    style={{ '--slider-fill': `${fillPercent}%` }}
+                    onChange={(e) => handleSliderChange(key, e.target.value)}
+                    onMouseUp={() => handleSliderCommit(key)}
+                    onPointerUp={() => handleSliderCommit(key)}
+                  />
+                </div>
+                {passive && (
+                  <span className="skill-passive-stat">
+                    {passive.label}  {passive.value}
+                  </span>
+                )}
               </div>
             </li>
           );

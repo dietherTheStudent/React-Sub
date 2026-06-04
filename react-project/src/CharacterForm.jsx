@@ -36,6 +36,13 @@ function CharacterForm({ editingCharacter, onCreate, onUpdate, onCancelEdit }) {
     <div className="character-form">
       <h2>{isEditMode ? 'Edit Character' : 'Create Character'}</h2>
 
+      {isEditMode && (
+        <p className="edit-reset-warning" role="alert">
+          Committing to edit will reset all character stats, stat points, and
+          skills. Name and race can still be changed.
+        </p>
+      )}
+
       <form onSubmit={handleSubmit}>
         <label className="form-field">
           <span>Name</span>
@@ -61,7 +68,7 @@ function CharacterForm({ editingCharacter, onCreate, onUpdate, onCancelEdit }) {
 
         <div className="form-actions">
           <button type="submit" className="btn btn-primary">
-            {isEditMode ? 'Save Changes' : 'Create Character'}
+            {isEditMode ? 'Save & Reset Character' : 'Create Character'}
           </button>
 
           {isEditMode && (
